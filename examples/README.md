@@ -95,8 +95,9 @@ ones.
 After training it saves the weights to `kRamanModelStem` (a `.w` file
 under `C:/HypercubeLCN/RamanModels/`), reloads them into a fresh
 extractor, and checks the two agree on a probe spectrum before
-trusting the file. The final line reports RMSE over the full train and
-validation splits.
+trusting the file. The file magic is `LCN2` as of 1.2.0; a 1.1.0
+(`LCN1`) file fails with bad magic and needs a retrain. The final line
+reports RMSE over the full train and validation splits.
 
 Set `kSkipTrain = true` to skip training and score an already-saved
 `.w` file instead.

@@ -1,5 +1,17 @@
 # Raman Baseline Extraction
 
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| LCN | Locally Connected Network: the trained hypercube, class `Core` + `Training`. |
+| dim | Hypercube dimension. This example uses 11. |
+| N | Vertex count, N = 2ᵈⁱᵐ = 2048. Spectrum length and field length. |
+| z_max | Depth count. This example uses 8. |
+| span, gather_span | Lookback window width. This example uses 4. |
+| RMSE | Root mean squared error in raw counts after denormalization. |
+| LCOHard | The Raman dataset split: 10000 training spectra, 2000 held-out. |
+
 A Raman spectrum is an array of intensity values: sharp molecular
 peaks sitting on a slow fluorescence background. The task is to
 characterize that background so that it can, in follow-on steps, be
@@ -30,6 +42,8 @@ Train with `lcn_raman`, write selected spectra with
 ---
 
 ## Results
+
+**Status: Release run of `lcn_raman`. The table was produced before the weight layout changed (1.2.0); the same seed now draws a different net, so a re-run gives different numbers with the same picture.**
 
 Full LCOHard split — 10000 training spectra, 2000 held-out validation
 spectra. Denormalized RMSE in raw counts (see [Error](#error)).

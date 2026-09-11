@@ -1,5 +1,22 @@
 # HypercubeLCN Python SDK
 
+**Status: package 1.2.x. Weights are packed depth, axis, tap, vertex.**
+
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| LCN | The Python class: forward, fit, custom loops, weights, persistence. |
+| dim | Hypercube dimension. Valid range [4, 24]. |
+| N | Vertex count, N = 2ᵈⁱᵐ. Field length. |
+| field | Length-N float32 vector on the cube (the host packs domain data). |
+| depth, z_max | One gather-and-write over all vertices; z_max of them per pass. Constructor 0 means use dim. |
+| gather_span | Lookback window width, 2…6. |
+| tanh_last | False = last depth writes the raw accumulator (raw-unit regression). |
+| weights | All trainable weights: depth, axis, tap, vertex. Length N × dim × gather_span × z_max. |
+| masked loss | A target narrower than N constrains only vertices 0..width−1. |
+| free hidden vertices | The unconstrained rest of the cube — computation without loss. |
+
 HypercubeLCN is a **locally connected network on a Boolean hypercube** — a
 deep feedforward net whose connectivity is the cube's own edges and whose
 weights are **all trained**. One class — `LCN` — owns the whole product:
@@ -21,7 +38,6 @@ Package version: single source `python/hypercube_lcn/_version.py`
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [What a pass is](#what-a-pass-is)
-- [Vocabulary](#vocabulary)
 - [API reference](#api-reference)
 - [Input data layout](#input-data-layout)
 - [Data types](#data-types)
@@ -192,7 +208,7 @@ x  (length-N field, host-packed)
  last field written  =  output (length N)
 ```
 
-- **N = 2^dim** vertices / field length (dim 4…24).
+- **N = 2ᵈⁱᵐ** vertices / field length (dim 4…24).
 - Every vertex owns a private weight table at every depth — nothing is
   shared, and **everything trains**: the gradient reaches all
   N × dim × gather_span × z_max weights.
@@ -200,20 +216,6 @@ x  (length-N field, host-packed)
   package does not reshape domain data onto the cube.
 - Targets may be **narrower than N**: then only vertices `0 .. width-1`
   carry loss and the rest of the cube is free hidden units.
-
-## Vocabulary
-
-| Term | Meaning |
-|------|---------|
-| **Field** | Length-N float32 vector on the cube (you pack domain data) |
-| **Depth** | One gather-and-write over all vertices; `z_max` of them per pass |
-| **Lookback window** | Each read sees a neighbor's last `gather_span` fields, not just the newest |
-| **Masked loss** | A target narrower than N constrains only vertices 0..width-1 |
-| **Free hidden vertices** | The unconstrained rest of the cube — computation without loss |
-| **N** | Vertices / field length = 2^dim |
-| **z_max** | Depth count; constructor 0 means "use dim" |
-| **gather_span** | Lookback window width, 2…6 |
-| **tanh_last** | False = last depth writes the raw accumulator (raw-unit regression) |
 
 ## API reference
 
@@ -285,7 +287,7 @@ at the top of the dim range allocation itself is the limit.
 | `z_max` | Resolved depth count (constructor 0 already replaced by dim) |
 | `gather_span`, `tanh_last`, `seed` | Config mirrors |
 | `num_weights` | N × dim × gather_span × z_max |
-| `weights` | All weights as a float32 array (z-major: depth, vertex, axis, tap). **Settable** — exact length required |
+| `weights` | All weights as a float32 array (depth, axis, tap, vertex). **Settable** — exact length required |
 | `grad` | The accumulated gradient, same layout as `weights` |
 | `lr` | Learning rate currently in effect (after `set_epoch`) |
 | `has_best`, `best_epoch`, `best_metric` | restore-best state |
@@ -338,8 +340,9 @@ Typical mistakes:
 |-----------|----------------|------------------|
 | `save` / `pickle` | Constructor config + all weights | **No** (Adam moments, step count, best snapshot are not saved) |
 
-Pickle version is bumped when the serialized layout changes; newer libraries
-reject unknown future versions with an upgrade message.
+Pickle version is 2 as of 1.2.0 (weight layout depth, axis, tap, vertex).
+Version 1 pickles from 1.1.0 (depth, vertex, axis, tap) are rejected — retrain.
+Newer libraries reject unknown future versions with an upgrade message.
 
 ```python
 net.save("model.pkl")

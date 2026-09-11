@@ -86,8 +86,8 @@ public:
                           .gather_span = gather_span_, .tanh_last = tanh_last_};
     }
 
-    /// All trainable weights, z-major: depth, vertex, axis, tap.
-    /// Length N * dim * gather_span * z_max.
+    /// All trainable weights: depth, axis, tap, vertex.
+    /// Length N * dim * gather_span * z_max. Vertex is the fastest index.
     [[nodiscard]] const std::vector<float>& Weights() const { return w_; }
 
     /// @brief Replace all weights (e.g. from a snapshot or a file).
@@ -103,7 +103,13 @@ public:
     void LoadWeights(const float* data, size_t count);
 
 private:
-    static constexpr uint32_t NearestMask(size_t i) { return 1u << i; }
+    /// Base of the N-float table for (depth z, axis, tap k). Weights are
+    /// stored depth, axis, tap, vertex so this table is contiguous and the
+    /// vertex loop in Forward and Backward runs over adjacent floats.
+    [[nodiscard]] size_t TapOffset(size_t z, size_t axis, size_t k) const
+    {
+        return ((z * dim_ + axis) * gather_span_ + k) * n_;
+    }
 
     explicit Core(const CoreConfig& cfg);
 
@@ -116,6 +122,6 @@ private:
     size_t gather_span_ = 0;
     bool tanh_last_ = false;
     std::vector<float> s_;
-    std::vector<float> w_;    // z-major, uniform tables: dim axes x span taps per vertex
+    std::vector<float> w_;    // depth, axis, tap, vertex
     std::vector<float> o_;    // output
 };

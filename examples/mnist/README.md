@@ -1,5 +1,17 @@
 # MNIST on the LCN
 
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| LCN | Locally Connected Network: the trained hypercube, class `Core` + `Training`. |
+| dim | Hypercube dimension. This example uses 11. |
+| N | Vertex count, N = 2ᵈⁱᵐ = 2048. Field length. |
+| z_max | Depth count. This example uses 10. |
+| span, gather_span | Lookback window width. This example uses 4. |
+| striped one-hot | Vertex v targets class v mod 10; +1 on the true class, −1 elsewhere. |
+| averaged argmax | Predicted class = argmax of the ten per-class means over the replicas. |
+
 The first classification task on the LCN. The SDK surface is a
 field-to-field regressor (length-N field in, length-N field out,
 squared-error loss), so this example does classification the
@@ -32,6 +44,8 @@ t10k-images-idx3-ubyte    t10k-labels-idx1-ubyte
 Train is 60000 images, test 10000.
 
 ## Results
+
+**Status: Release run of `lcn_mnist`. The table was produced before the weight layout changed (1.2.0); the same seed now draws a different net, so a re-run gives different numbers with the same picture.**
 
 `DualPlaneResize` embed at full occupancy, zero-centered [0, 1]
 fields, striped targets over all 2048 outputs, augmentation on.

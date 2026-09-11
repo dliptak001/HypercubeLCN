@@ -1,5 +1,23 @@
 # HypercubeLCN C++ SDK
 
+**Status: matches the public headers for 1.2.x. Weights are packed depth, axis, tap, vertex.**
+
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| Core | The network: owns the weights and runs Forward. |
+| Training | Friend class: Backward, Adam, cosine LR, restore-best. |
+| dim | Hypercube dimension. Valid range [4, 24]. |
+| N | Vertex count, N = 2ᵈⁱᵐ. Field length. |
+| field | Length-N float vector on the cube (the host packs domain data). |
+| depth, z_max | One gather-and-write over all vertices; z_max of them per pass. Config 0 means use dim. |
+| gather_span | Lookback window width, 2…6. Each read sees a neighbor's last gather_span fields. |
+| tanh_last | false = last depth writes the raw accumulator (raw-unit regression). |
+| w_ | All trainable weights: depth, axis, tap, vertex. Length N × dim × gather_span × z_max. |
+| masked loss | A target narrower than N constrains only vertices 0..width−1. |
+| free hidden vertices | The unconstrained rest of the cube — computation without loss. |
+
 HypercubeLCN is a **locally connected network on a Boolean hypercube** — a
 deep feedforward net whose connectivity is the cube's own edges and whose
 weights are **all trained**. Two classes own the whole product: `Core` runs
@@ -14,15 +32,13 @@ sequence (that is
 
 The same product from Python: **[Python_SDK.md](Python_SDK.md)**.  
 The passes, loop by loop: **[forward.md](forward.md)** / **[training.md](training.md)**.  
-Worked programs: **[examples/README.md](../examples/README.md)**.  
-This guide matches the public headers for **1.0.x**.
+Worked programs: **[examples/README.md](../examples/README.md)**.
 
 ## Contents
 
 - [Build and link](#build-and-link)
 - [Quick start](#quick-start)
 - [What a pass is](#what-a-pass-is)
-- [Vocabulary](#vocabulary)
 - [API reference](#api-reference)
 - [Input data layout](#input-data-layout)
 - [Error handling](#error-handling)
@@ -182,7 +198,7 @@ x  (length-N field, host-packed)
  last field written  =  output (length N)
 ```
 
-- **N = 2^dim** vertices / field length (dim 4…24).
+- **N = 2ᵈⁱᵐ** vertices / field length (dim 4…24).
 - Every vertex owns a private weight table at every depth — nothing is
   shared, and **everything trains**: the gradient reaches all
   N × dim × gather_span × z_max weights.
@@ -194,20 +210,6 @@ x  (length-N field, host-packed)
   library does not reshape domain data onto the cube.
 - Targets may be **narrower than N**: then only vertices `0 .. width-1`
   carry loss and the rest of the cube is free hidden units.
-
-## Vocabulary
-
-| Term | Meaning |
-|------|---------|
-| **Field** | Length-N float vector on the cube (you pack domain data) |
-| **Depth** | One gather-and-write over all vertices; `z_max` of them per pass |
-| **Lookback window** | Each read sees a neighbor's last `gather_span` fields, not just the newest |
-| **Masked loss** | A target narrower than N constrains only vertices 0..width-1 |
-| **Free hidden vertices** | The unconstrained rest of the cube — computation without loss |
-| **N** | Vertices / field length = 2^dim |
-| **z_max** | Depth count; config 0 means "use dim" |
-| **gather_span** | Lookback window width, 2…6 |
-| **tanh_last** | false = last depth writes the raw accumulator (raw-unit regression) |
 
 ## API reference
 
@@ -222,7 +224,7 @@ Everything is fixed at construction; both constructors validate and throw
 
 ```cpp
 struct CoreConfig {
-    size_t dim = 8;           // hypercube dimension [4, 24]; N = 2^dim
+    size_t dim = 8;           // hypercube dimension [4, 24]; N = 1 << dim
     uint64_t seed = ...;      // weight-init seed (normal, Xavier-style scale)
     size_t z_max = 0;         // depths; 0 = use dim, else must be >= 2
     size_t gather_span = 2;   // lookback window width [2, 6]
@@ -267,7 +269,7 @@ core->Dim();  core->N();  core->ZMax();  core->GatherSpan();
 core->TanhLast();  core->Seed();
 core->Config();                        // resolved CoreConfig (z_max filled in)
 
-const std::vector<float>& w = core->Weights();  // z-major: depth, vertex, axis, tap
+const std::vector<float>& w = core->Weights();  // depth, axis, tap, vertex
 core->LoadWeights(std::span<const float>{w2});  // exact-length replacement
 ```
 
@@ -361,7 +363,7 @@ its configuration plus the weight vector.
 
 | Mechanism | What is stored | Optimizer state? |
 |-----------|----------------|------------------|
-| `core->Weights()` / `core->LoadWeights(...)` | All weights, z-major, verbatim | **No** (Adam moments, step count, best snapshot live in `Training`) |
+| `core->Weights()` / `core->LoadWeights(...)` | All weights, depth/axis/tap/vertex, verbatim | **No** (Adam moments, step count, best snapshot live in `Training`) |
 
 Write the vector with any format you like; on load, reconstruct the Core
 from the **same config** (dim, z_max, gather_span decide the weight count
@@ -372,7 +374,9 @@ training, construct a fresh `Training` — Adam starts cold.
 The Raman examples carry a ready-made recipe: a small header + weights
 file format with a config check on load
 ([BaselineExtractor](../examples/RamanBaseline/BaselineExtractor.cpp)).
-The Python surface pickles the same thing (config + weights).
+The magic is `LCN2` as of 1.2.0; a 1.1.0 (`LCN1`) file fails with bad
+magic and needs a retrain. The Python surface pickles the same weights
+(config + weights; pickle v1 is rejected the same way).
 
 ## Limitations
 

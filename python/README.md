@@ -1,5 +1,18 @@
 # Hypercube LCN
 
+**Status: Python package 1.2.x. Weights are packed depth, axis, tap, vertex.**
+
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| LCN | The Python class wrapping Core + Training. |
+| dim | Hypercube dimension. Valid range [4, 24]. |
+| N | Vertex count, N = 2ᵈⁱᵐ. Field length. |
+| z_max | Depth count; constructor 0 means use dim. |
+| gather_span | Lookback window width, 2–6. |
+| weights | All trainable weights: depth, axis, tap, vertex. |
+
 [![Build wheels](https://github.com/dliptak001/HypercubeLCN/actions/workflows/wheels.yml/badge.svg)](https://github.com/dliptak001/HypercubeLCN/actions/workflows/wheels.yml)
 [![PyPI](https://img.shields.io/pypi/v/hypercube-lcn)](https://pypi.org/project/hypercube-lcn/)
 [![Python](https://img.shields.io/pypi/pyversions/hypercube-lcn)](https://pypi.org/project/hypercube-lcn/)
@@ -256,9 +269,9 @@ batch size — the same convention as the C++ examples.
 - **`tanh_last`** — off by default (raw accumulator out); on confines the
   output to (-1, 1)
 - **Weights and gradient as NumPy** — `net.weights` (settable) and
-  `net.grad`, z-major layout: depth, vertex, axis, tap
+  `net.grad`, layout depth, axis, tap, vertex
 - **Save / load** — `save` / `load` (pickle: config + weights; optimizer
-  state is not stored)
+  state is not stored; v1 pickles from 1.1.0 are rejected)
 - **NumPy float32** — arrays converted for you; prefer contiguous float32
 
 ---

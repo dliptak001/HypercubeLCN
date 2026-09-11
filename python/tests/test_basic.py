@@ -291,3 +291,83 @@ def test_pickle_roundtrip(tmp_path):
 def test_repr():
     r = repr(make_net(dim=4))
     assert "LCN(dim=4" in r
+
+
+# ── Layout identity (depth, axis, tap, vertex) ──
+
+def _tap_offset(z, axis, k, dim, span, n):
+    return ((z * dim + axis) * span + k) * n
+
+
+def _numpy_forward(x, w, dim, n, z_max, span, tanh_last):
+    s = np.zeros((z_max + span) * n, dtype=np.float64)
+    s[(span - 1) * n : span * n] = x
+    for z in range(z_max):
+        out = np.zeros(n, dtype=np.float64)
+        for axis in range(dim):
+            idx = np.arange(n) ^ (1 << axis)
+            for k in range(span):
+                src = s[(z + k) * n : (z + k + 1) * n]
+                off = _tap_offset(z, axis, k, dim, span, n)
+                out += w[off : off + n] * src[idx]
+        last = z + 1 == z_max
+        if not (last and not tanh_last):
+            out = np.tanh(out)
+        s[(z + span) * n : (z + span + 1) * n] = out
+    o = s[(z_max + span - 1) * n : (z_max + span) * n].copy()
+    return o.astype(np.float32), s
+
+
+def _numpy_backward(s, w, o, target, dim, n, z_max, span, tanh_last):
+    dw = np.zeros_like(w, dtype=np.float64)
+    ds = np.zeros_like(s, dtype=np.float64)
+    base = (z_max + span - 1) * n
+    ds[base : base + target.size] = o[: target.size] - target
+    for z in range(z_max - 1, -1, -1):
+        inc = ds[(z + span) * n : (z + span + 1) * n].copy()
+        last = z + 1 == z_max
+        if not (last and not tanh_last):
+            y = s[(z + span) * n : (z + span + 1) * n]
+            inc *= 1.0 - y * y
+        for axis in range(dim):
+            idx = np.arange(n) ^ (1 << axis)
+            for k in range(span):
+                src = s[(z + k) * n : (z + k + 1) * n]
+                off = _tap_offset(z, axis, k, dim, span, n)
+                wv = w[off : off + n]
+                dw[off : off + n] += inc * src[idx]
+                dsrc = ds[(z + k) * n : (z + k + 1) * n]
+                dsrc[idx] += inc * wv
+    return dw.astype(np.float32)
+
+
+@pytest.mark.parametrize("tanh_last", [False, True])
+def test_forward_backward_match_numpy_reference(tanh_last):
+    # Independent gather: out[v] += w[z, axis, k, v] * src[v XOR mask].
+    net = make_net(dim=4, z_max=3, gather_span=2, tanh_last=tanh_last, seed=11)
+    rng = np.random.default_rng(3)
+    x = rng.standard_normal(net.N).astype(np.float32)
+    t = rng.standard_normal(net.N).astype(np.float32)
+    w = net.weights.astype(np.float64)
+
+    y_ref, s = _numpy_forward(
+        x, w, net.dim, net.N, net.z_max, net.gather_span, tanh_last)
+    y = net.forward(x)
+    np.testing.assert_allclose(y, y_ref, rtol=1e-5, atol=1e-6)
+
+    net.zero_grad()
+    net.loss(t)
+    net.backward()
+    dw_ref = _numpy_backward(
+        s, w, y_ref.astype(np.float64), t.astype(np.float64),
+        net.dim, net.N, net.z_max, net.gather_span, tanh_last)
+    np.testing.assert_allclose(net.grad, dw_ref, rtol=1e-5, atol=1e-6)
+
+
+def test_pickle_v1_rejected():
+    net = make_net(dim=4)
+    state = net.__getstate__()
+    state["_version"] = 1
+    fresh = hl.LCN.__new__(hl.LCN)
+    with pytest.raises(ValueError, match="layout"):
+        fresh.__setstate__(state)

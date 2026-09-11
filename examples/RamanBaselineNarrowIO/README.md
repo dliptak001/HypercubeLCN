@@ -1,5 +1,17 @@
 # Raman Baseline Extraction, Narrow IO
 
+## Definitions
+
+| Symbol / term | Meaning |
+|---------------|---------|
+| dim | Hypercube dimension. This example uses 12; IO stays 11 bits wide. |
+| N | Vertex count, N = 2ᵈⁱᵐ = 4096. |
+| IO | The 2048 addresses 0 … 2047 that carry the spectrum and the loss. |
+| free hidden vertices | Addresses 2048 … 4095: zero on input, unconstrained by loss. |
+| masked loss | `Training::Loss(target, count)` seeds gradient only on the IO vertices. |
+| RMSE | Root mean squared error in raw counts after denormalization. |
+| LCOHard | The Raman dataset split, same as the dim-11 baseline. |
+
 The [dim-11 baseline](../RamanBaseline/README.md) has a
 peculiar symmetry: input, output, and every unit of computation share
 the same 2048 vertices. There are no hidden units except across depth.
@@ -38,6 +50,8 @@ spectra with `lcn_raman_narrow_extract`, plot with this folder's
 `extracted_baselines_narrowIO.png`).
 
 ## Results
+
+**Status: Release run of `lcn_raman_narrow`. The table was produced before the weight layout changed (1.2.0); the same seed now draws a different net, so a re-run gives different numbers with the same picture.**
 
 The thesis holds, with room to spare. Full LCOHard split, denormalized
 RMSE in counts, against the dim-11 baseline's numbers:

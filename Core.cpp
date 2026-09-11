@@ -75,38 +75,35 @@ void Core::Forward(const float* input_field)
 
     ++forward_serial_;
     float* s = s_.data();
+    const float* w = w_.data();
+    const size_t n = n_;
+    const size_t dim = dim_;
     const size_t span = gather_span_;
-    std::copy(input_field, input_field + n_, s + (span - 1) * n_);
+    std::copy(input_field, input_field + n, s + (span - 1) * n);
 
-    const size_t table_stride = dim_ * span;
-
-    // depth z reads slots z .. z+span-1, writes slot z+span
+    // depth z reads slots z .. z+span-1, writes slot z+span.
+    // v is innermost: consecutive vertices are contiguous.
     for (size_t z = 0; z < z_max_; ++z)
     {
-        const float* w_z = w_.data() + z * n_ * table_stride;
-        const bool last = (z + 1 == z_max_);
-
-        // iterate over all vertices; every vertex has its own table
-        for (size_t v = 0; v < n_; ++v)
+        float* out = s + (z + span) * n;
+        std::fill(out, out + n, 0.f);
+        for (size_t axis = 0; axis < dim; ++axis)
         {
-            const float* w_v = w_z + v * table_stride;
-
-            float acc = 0.f;
-            // iterate over each nearest neighbor
-            for (size_t axis = 0; axis < dim_; ++axis)
+            const size_t mask = size_t{1} << axis;
+            for (size_t k = 0; k < span; ++k)
             {
-                const size_t v_nn = v ^ NearestMask(axis);
-                const float* w_axis = w_v + axis * span;
-
-                // tap k reads slot z+k; early depths reach into the zero prefix
-                for (size_t k = 0; k < span; ++k)
-                    acc += w_axis[k] * s[(z + k) * n_ + v_nn];
+                const float* src = s + (z + k) * n;
+                const float* wv = w + TapOffset(z, axis, k);
+                for (size_t v = 0; v < n; ++v)
+                    out[v] += wv[v] * src[v ^ mask];
             }
-
-            s[(z + span) * n_ + v] = (last && !tanh_last_) ? acc : std::tanh(acc);
+        }
+        if (!((z + 1 == z_max_) && !tanh_last_))
+        {
+            for (size_t v = 0; v < n; ++v)
+                out[v] = std::tanh(out[v]);
         }
     }
 
-    const float* out = s + (z_max_ + span - 1) * n_;
-    std::copy(out, out + n_, o_.begin());
+    std::copy(s + (z_max_ + span - 1) * n, s + (z_max_ + span) * n, o_.begin());
 }

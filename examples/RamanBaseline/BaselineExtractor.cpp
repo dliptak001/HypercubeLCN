@@ -20,8 +20,8 @@
 
 namespace {
 
-// Weight-file format tag ('LCN' + format version 1).
-constexpr char kMagic[4] = {'L', 'C', 'N', '1'};
+// Weight-file format tag ('LCN' + format version). 2 = depth, axis, tap, vertex.
+constexpr char kMagic[4] = {'L', 'C', 'N', '2'};
 
 void CheckRoundTrip(std::span<const float> spec)
 {

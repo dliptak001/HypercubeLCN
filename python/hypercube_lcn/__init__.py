@@ -311,8 +311,8 @@ class LCN:
 
     @property
     def weights(self) -> np.ndarray:
-        """Copy of all trainable weights, z-major: depth, vertex, axis, tap.
-        Length N * dim * gather_span * z_max."""
+        """Copy of all trainable weights: depth, axis, tap, vertex.
+        Length N * dim * gather_span * z_max. Vertex is the fastest index."""
         return self._core.weights()
 
     @weights.setter
@@ -393,7 +393,7 @@ class LCN:
 
     # ── Persistence ──
 
-    _PERSISTENCE_VERSION = 1
+    _PERSISTENCE_VERSION = 2
 
     def __getstate__(self) -> dict:
         """Serialize constructor config + weights.
@@ -413,6 +413,13 @@ class LCN:
                 f"Model was saved with persistence version {version}, "
                 f"but this version only supports up to "
                 f"{self._PERSISTENCE_VERSION}. Upgrade hypercube-lcn."
+            )
+        if version < 2:
+            raise ValueError(
+                "Model was saved with persistence version "
+                f"{version} (weight layout depth, vertex, axis, tap). "
+                "This version stores depth, axis, tap, vertex. "
+                "Retrain; old pickles are not loaded."
             )
         self.__init__(**dict(state["ctor"]))
         self._core.load_weights(_to_float32(state["weights"]))

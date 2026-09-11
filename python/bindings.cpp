@@ -77,7 +77,7 @@ PYBIND11_MODULE(_core, m)
 
         .def("weights", [](const Core& self) {
             return vector_to_array(self.Weights());
-        }, "Copy of all trainable weights, z-major: depth, vertex, axis, tap.")
+        }, "Copy of all trainable weights: depth, axis, tap, vertex.")
 
         .def("load_weights", [](Core& self, FloatArray w) {
             auto buf = w.request();

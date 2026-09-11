@@ -7,8 +7,10 @@
 #   Repo:     HypercubeLCN
 #   Workflow: wheels.yml
 #
-# Publish runs only on tags matching v* (e.g. v1.0.0). skip-existing avoids
-# failing when re-running a tag after a partial upload.
+# Publish runs only on tags matching v* (e.g. v1.2.0). skip-existing avoids
+# failing when re-running a tag after a partial upload. The same job then
+# creates the GitHub Release for the tag with the wheels and sdist attached
+# and auto-generated notes; a tag alone does not create a Release.
 
 name: Build wheels
 
@@ -75,6 +77,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       id-token: write
+      contents: write
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -85,3 +88,9 @@ jobs:
         with:
           packages-dir: dist
           skip-existing: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: HypercubeLCN ${{ github.ref_name }}
+          files: dist/*
+          generate_release_notes: true

@@ -105,7 +105,6 @@ void Training::Backward()
     const size_t n = core_.n_;
     const size_t dim = core_.dim_;
     const size_t span = core_.gather_span_;
-    const size_t table_stride = dim * span;
     const float* s = core_.s_.data();
     const float* w = core_.w_.data();
     float* ds = ds_.data();
@@ -114,32 +113,30 @@ void Training::Backward()
     // reverse of Forward: depth z read slots z .. z+span-1, wrote slot z+span
     for (size_t z = core_.z_max_; z-- > 0;)
     {
-        const float* w_z = w + z * n * table_stride;
-        float* dw_z = dw + z * n * table_stride;
-        const bool last = (z + 1 == core_.z_max_);
-
-        // iterate over all vertices; every vertex has its own table
-        for (size_t v = 0; v < n; ++v)
+        float* inc = ds + (z + span) * n;
+        if (!((z + 1 == core_.z_max_) && !core_.tanh_last_))
         {
-            const float y = s[(z + span) * n + v];
-            const float dact = (last && !core_.tanh_last_) ? 1.f : (1.f - y * y);
-            const float incoming = ds[(z + span) * n + v] * dact;
-            const float* w_v = w_z + v * table_stride;
-            float* dw_v = dw_z + v * table_stride;
+            const float* y = s + (z + span) * n;
+            for (size_t v = 0; v < n; ++v)
+                inc[v] *= (1.f - y[v] * y[v]);
+        }
 
-            // iterate over each nearest neighbor
-            for (size_t axis = 0; axis < dim; ++axis)
+        for (size_t axis = 0; axis < dim; ++axis)
+        {
+            const size_t mask = size_t{1} << axis;
+            for (size_t k = 0; k < span; ++k)
             {
-                const size_t v_nn = v ^ Core::NearestMask(axis);
-                const float* w_axis = w_v + axis * span;
-                float* dw_axis = dw_v + axis * span;
-
+                const float* src = s + (z + k) * n;
+                const float* wv = w + core_.TapOffset(z, axis, k);
+                float* dwv = dw + core_.TapOffset(z, axis, k);
+                float* dsrc = ds + (z + k) * n;
                 // tap k read slot z+k; prefix taps see zeros, so their dw
                 // stays zero and their ds spills into slots nothing reads
-                for (size_t k = 0; k < span; ++k)
+                for (size_t v = 0; v < n; ++v)
                 {
-                    dw_axis[k] += incoming * s[(z + k) * n + v_nn];
-                    ds[(z + k) * n + v_nn] += incoming * w_axis[k];
+                    const float in = inc[v];
+                    dwv[v] += in * src[v ^ mask];
+                    dsrc[v ^ mask] += in * wv[v];
                 }
             }
         }
